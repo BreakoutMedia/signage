@@ -3,114 +3,112 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Wetter</title>
+<title>Wetter – Ahaus</title>
 <style>
-  html,body{margin:0;height:100%;width:100%;background:#000 no-repeat center center;background-size:cover;
-            font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#fff;
-            text-shadow:0 2px 6px rgba(0,0,0,.8);display:flex;flex-direction:column;justify-content:center;align-items:center}
-  .city{font-size:2rem;margin-bottom:.3rem}
-  .temp{font-size:5.2rem;font-weight:800;line-height:1}
-  .desc{font-size:1.6rem;margin-top:.2rem}
-  .row{display:flex;gap:1.5rem;margin-top:1rem;font-size:1.2rem;opacity:.95}
-  .badge{position:fixed;right:16px;top:16px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.25);
-         padding:6px 10px;border-radius:10px;font-size:0.95rem}
+html, body {
+  margin:0;
+  height:100%;
+  width:100%;
+  background: url('bg_weather.jpg') no-repeat center center fixed;
+  background-size: cover;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  color:#fff;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height:100%;
+  padding: 40px 60px;
+  box-sizing: border-box;
+}
+header {
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+}
+header h1 {
+  font-size: 60px;
+  margin:0;
+}
+.content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.left .label {font-size:44px}
+.temp-row {display:flex;align-items:center;gap:20px;margin-top:8px}
+.temp {font-size:160px;font-weight:700}
+.icon {font-size:90px}
+.feels {font-size:36px;margin-top:14px}
+.right {max-width: 800px}
+.right h2 {font-size:56px;margin:0}
+.grid {margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px 80px;font-size:34px}
+footer {
+  font-size:28px;
+}
 </style>
 </head>
 <body>
-  <div class="badge" id="updated">--:--</div>
-  <div class="city" id="city">Ahaus</div>
-  <div class="temp" id="temp">--°</div>
-  <div class="desc" id="desc">Lädt…</div>
-  <div class="row">
-    <div>Regen: <span id="prec">—</span>%</div>
-    <div>Feuchte: <span id="humid">—</span>%</div>
-    <div>Wind: <span id="wind">—</span> km/h</div>
+<div class="container">
+  <header>
+    <h1>Ahaus Wetter</h1>
+    <div id="updated">--:--</div>
+  </header>
+  <div class="content">
+    <div class="left">
+      <div class="label">Jetzt</div>
+      <div class="temp-row">
+        <div class="temp" id="temp">--°</div>
+        <div class="icon" id="icon">☀️</div>
+      </div>
+      <div class="feels" id="feels">Gefühlt --°</div>
+    </div>
+    <div class="right">
+      <h2 id="cond">—</h2>
+      <div class="grid">
+        <div>Niederschlag:</div><div id="prec">— %</div>
+        <div>Feuchtigkeit:</div><div id="humid">— %</div>
+        <div>Wind:</div><div id="wind">— km/h</div>
+        <div>Luftqualität:</div><div id="aqiText">—</div>
+      </div>
+    </div>
   </div>
-
+  <footer>
+    Aktualisiert automatisch · Quelle: Open-Meteo
+  </footer>
+</div>
 <script>
-/* === Konfiguration (Ahaus) – keine API-Keys nötig === */
-const LAT = 52.079, LON = 6.965, CITY = 'Ahaus', REFRESH_MIN = 10;
-
-/* WMO → Kategorie/Text/Emoji */
-function wmoCategory(code){
-  code = Number(code);
-  if ([0,1].includes(code)) return 'clear';
-  if ([2,3].includes(code)) return 'clouds';
-  if ([45,48].includes(code)) return 'fog';
-  if ([51,53,55,61,63,65,66,67,80,81,82].includes(code)) return 'rain';
-  if ([71,73,75,77,85,86].includes(code)) return 'snow';
-  if ([95,96,99].includes(code)) return 'thunder';
-  return 'clouds';
+const CITY_NAME='Ahaus'; const LAT=52.079; const LON=6.965;
+function wmoToText(c){const m={0:'Klar',1:'Überwiegend klar',2:'Wolkig',3:'Bedeckt',45:'Nebel',48:'Nebel',51:'Niesel',53:'Niesel',55:'Niesel',61:'Regen',63:'Regen',65:'Starker Regen',66:'Gefrierender Regen',67:'Gefrierender Regen',71:'Schnee',73:'Schnee',75:'Starker Schnee',77:'Schneekörner',80:'Schauer',81:'Schauer',82:'Starke Schauer',85:'Schneeschauer',86:'Starke Schneeschauer',95:'Gewitter',96:'Gewitter',99:'Gewitter'};return m[c]||'Wetter'}
+function wmoToEmoji(c,n){const e={0:n?'🌙':'☀️',1:n?'🌙':'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌦️',61:'🌧️',63:'🌧️',65:'🌧️',66:'🌧️',67:'🌧️',71:'🌨️',73:'🌨️',75:'❄️',80:'🌦️',81:'🌦️',82:'🌧️',95:'⛈️',96:'⛈️',99:'⛈️'};return e[c]||'☁️'}
+function pm25ToQuality(pm){if(pm==null)return'—';if(pm<=12)return'Gut';if(pm<=35.4)return'Mittel';return'Schlecht'}
+async function loadData(){
+  const wURL=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current_weather=true&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,weathercode,windspeed_10m&timezone=auto`;
+  const aURL=`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LON}&hourly=pm2_5&timezone=auto`;
+  const [wr,ar]=await Promise.all([fetch(wURL),fetch(aURL)]);
+  const weather=await wr.json(); const air=await ar.json();
+  const cw=weather.current_weather||{}; const h=weather.hourly||{};
+  let idx=0;if(h.time&&h.time.length){const iso=new Date().toISOString().slice(0,13);idx=h.time.findIndex(t=>t.slice(0,13)===iso);if(idx<0) idx=h.time.length-1;}
+  const temp=Math.round(cw.temperature ?? h.temperature_2m?.[idx] ?? 0);
+  const feels=Math.round(h.apparent_temperature?.[idx] ?? temp);
+  const hum=Math.round(h.relative_humidity_2m?.[idx] ?? 0);
+  const prec=Math.round(h.precipitation_probability?.[idx] ?? 0);
+  const wind=Math.round(cw.windspeed ?? h.windspeed_10m?.[idx] ?? 0);
+  const code=cw.weathercode ?? h.weathercode?.[idx] ?? 3;
+  let pm25=null;if(air&&air.hourly&&air.hourly.pm2_5){let aidx=0;if(air.hourly.time){const iso=new Date().toISOString().slice(0,13);aidx=air.hourly.time.findIndex(t=>t.slice(0,13)===iso);if(aidx<0)aidx=air.hourly.time.length-1;}pm25=air.hourly.pm2_5[aidx];}
+  document.getElementById('temp').textContent=temp+'°';
+  document.getElementById('feels').textContent='Gefühlt '+feels+'°';
+  document.getElementById('cond').textContent=wmoToText(Number(code));
+  document.getElementById('prec').textContent=(prec??0)+' %';
+  document.getElementById('humid').textContent=(hum??0)+' %';
+  document.getElementById('wind').textContent=(wind??0)+' km/h';
+  document.getElementById('icon').textContent=wmoToEmoji(Number(code),false);
+  document.getElementById('aqiText').textContent=pm25ToQuality(pm25);
+  document.getElementById('updated').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 }
-function wmoText(code){
-  const m={0:'Klar',1:'Überwiegend klar',2:'Wolkig',3:'Bedeckt',45:'Nebel',48:'Nebel',
-    51:'Niesel',53:'Niesel',55:'Niesel',61:'Regen',63:'Regen',65:'Starker Regen',
-    66:'Gefrierender Regen',67:'Gefrierender Regen',71:'Schnee',73:'Schnee',75:'Starker Schnee',
-    77:'Schneekörner',80:'Schauer',81:'Schauer',82:'Starke Schauer',85:'Schneeschauer',
-    86:'Starke Schneeschauer',95:'Gewitter',96:'Gewitter',99:'Gewitter'};
-  return m[Number(code)] || 'Wetter';
-}
-
-/* Kategorie → Hintergrunddatei */
-function pickBg(cat){
-  const map={
-    clear:'bg_clear.jpg', clouds:'bg_clouds.jpg', rain:'bg_rain.jpg',
-    snow:'bg_snow.jpg', thunder:'bg_thunder.jpg', fog:'bg_fog.jpg'
-  };
-  return map[cat] || map.clear;
-}
-
-/* Hintergrund setzen (mit Cache-Buster & Fallback) */
-function setBackground(url){
-  const img = new Image();
-  img.onload = ()=> document.documentElement.style.backgroundImage = `url('${url}')`;
-  img.onerror = ()=> {
-    if (!url.includes('bg_clouds.jpg')) setBackground('bg_clouds.jpg'); // Fallback
-  };
-  img.src = url + (url.includes('?')?'&':'?') + 'v=' + Date.now();
-}
-
-async function loadWeather(){
-  try{
-    const wURL = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current_weather=true&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,weathercode,windspeed_10m&timezone=auto`;
-    const r = await fetch(wURL, {cache:'no-store'});
-    const data = await r.json();
-
-    const cw = data.current_weather || {};
-    const h  = data.hourly || {};
-    let idx = 0;
-    if (h.time?.length){
-      const iso = new Date().toISOString().slice(0,13);
-      idx = h.time.findIndex(t => t.slice(0,13) === iso);
-      if (idx < 0) idx = h.time.length - 1;
-    }
-
-    const temp   = Math.round(cw.temperature ?? h.temperature_2m?.[idx] ?? 0);
-    const prec   = Math.round(h.precipitation_probability?.[idx] ?? 0);
-    const hum    = Math.round(h.relative_humidity_2m?.[idx] ?? 0);
-    const wind   = Math.round(cw.windspeed ?? h.windspeed_10m?.[idx] ?? 0);
-    const code   = cw.weathercode ?? h.weathercode?.[idx] ?? 3;
-
-    /* UI */
-    document.getElementById('city').textContent  = CITY;
-    document.getElementById('temp').textContent  = temp + '°';
-    document.getElementById('desc').textContent  = wmoText(code);
-    document.getElementById('prec').textContent  = prec;
-    document.getElementById('humid').textContent = hum;
-    document.getElementById('wind').textContent  = wind;
-    document.getElementById('updated').textContent =
-      new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-
-    /* Hintergrund */
-    const cat = wmoCategory(code);
-    setBackground(pickBg(cat));
-  }catch(e){
-    document.getElementById('desc').textContent = 'Fehler beim Laden';
-  }
-}
-
-loadWeather();
-setInterval(loadWeather, REFRESH_MIN * 60 * 1000);
+loadData();setInterval(loadData,10*60*1000);
 </script>
 </body>
 </html>
