@@ -5,10 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Wetter – Ahaus</title>
 <style>
-:root{
-  --fg:#0c1a2a; --fg-strong:#0a1320; --muted:#54606e; --chip:#e7f0f7;
-  --dot-good:#2ecc71; --dot-medium:#f1c40f; --dot-bad:#e74c3c;
-}
 html, body {
   margin:0;
   height:100%;
@@ -16,66 +12,49 @@ html, body {
   background: url('bg_ahaus.jpg') no-repeat center center fixed;
   background-size: cover;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  color: var(--fg);
+  color:#fff;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
 }
-.overlay {
-  background: rgba(255, 255, 255, 0.85);
-  position: absolute;
-  inset: 0;
+.container {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  height:100%;
+  padding: 40px 60px;
+  box-sizing: border-box;
 }
 header {
   display:flex;
   justify-content: space-between;
   align-items: center;
-  padding: 32px 48px 8px;
 }
 header h1 {
-  font-size: 64px;
-  margin: 0;
-  color: var(--fg-strong);
-}
-.menu-dots {
-  width:8px;height:8px;border-radius:50%;background:var(--muted);
-  box-shadow:0 -14px 0 0 var(--muted),0 14px 0 0 var(--muted);
+  font-size: 60px;
+  margin:0;
 }
 .content {
-  display:flex;
+  display: flex;
   justify-content: space-between;
-  padding:16px 48px;
-  flex:1;
+  align-items: flex-start;
 }
-.left {
-  display:flex;
-  flex-direction:column;
-}
-.left .label {font-size:44px;color:var(--muted)}
+.left .label {font-size:44px}
 .temp-row {display:flex;align-items:center;gap:20px;margin-top:8px}
-.temp {font-size:180px;font-weight:700;color:#000}
-.icon {font-size:100px}
-.feels {font-size:40px;color:var(--muted);margin-top:14px}
-.right {flex:0 0 880px;margin-left:48px}
-.right h2 {font-size:64px;margin:0;color:#000;font-weight:700}
-.grid {margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:22px 120px;font-size:40px}
-.grid .k {color:var(--muted)}
-.grid .v {color:#000}
-.aqi {display:inline-flex;align-items:center;gap:14px}
-.dot {width:24px;height:24px;border-radius:50%;background:var(--dot-good)}
+.temp {font-size:160px;font-weight:700}
+.icon {font-size:90px}
+.feels {font-size:36px;margin-top:14px}
+.right {max-width: 800px}
+.right h2 {font-size:56px;margin:0}
+.grid {margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px 80px;font-size:34px}
 footer {
-  padding:24px 48px 40px;display:flex;align-items:center;gap:30px;opacity:.9
-}
-.chip {
-  background:var(--chip);color:#143652;padding:12px 18px;border-radius:14px;font-size:28px
+  font-size:28px;
 }
 </style>
 </head>
 <body>
-<div class="overlay">
+<div class="container">
   <header>
-    <h1>Wetter</h1>
-    <div class="menu-dots"></div>
+    <h1>Ahaus Wetter</h1>
+    <div id="updated">--:--</div>
   </header>
   <div class="content">
     <div class="left">
@@ -84,28 +63,27 @@ footer {
         <div class="temp" id="temp">--°</div>
         <div class="icon" id="icon">☀️</div>
       </div>
-      <div class="feels" id="feels">Gefühlte Temperatur: --°</div>
+      <div class="feels" id="feels">Gefühlt --°</div>
     </div>
     <div class="right">
       <h2 id="cond">—</h2>
       <div class="grid">
-        <div class="k">Niederschlag:</div><div class="v" id="prec">— %</div>
-        <div class="k">Luftfeuchtigkeit:</div><div class="v" id="humid">— %</div>
-        <div class="k">Wind:</div><div class="v" id="wind">— km/h</div>
-        <div class="k">Luftqualität:</div><div class="v aqi"><span id="aqiText">—</span><span class="dot" id="aqiDot"></span></div>
+        <div>Niederschlag:</div><div id="prec">— %</div>
+        <div>Feuchtigkeit:</div><div id="humid">— %</div>
+        <div>Wind:</div><div id="wind">— km/h</div>
+        <div>Luftqualität:</div><div id="aqiText">—</div>
       </div>
     </div>
   </div>
   <footer>
-    <div class="chip" id="place">Ahaus</div>
-    <div class="chip" id="updated">Aktualisiert: --:--</div>
+    Aktualisiert automatisch · Quelle: Open-Meteo
   </footer>
 </div>
 <script>
 const CITY_NAME='Ahaus'; const LAT=52.079; const LON=6.965;
 function wmoToText(c){const m={0:'Klar',1:'Überwiegend klar',2:'Wolkig',3:'Bedeckt',45:'Nebel',48:'Nebel',51:'Niesel',53:'Niesel',55:'Niesel',61:'Regen',63:'Regen',65:'Starker Regen',66:'Gefrierender Regen',67:'Gefrierender Regen',71:'Schnee',73:'Schnee',75:'Starker Schnee',77:'Schneekörner',80:'Schauer',81:'Schauer',82:'Starke Schauer',85:'Schneeschauer',86:'Starke Schneeschauer',95:'Gewitter',96:'Gewitter',99:'Gewitter'};return m[c]||'Wetter'}
 function wmoToEmoji(c,n){const e={0:n?'🌙':'☀️',1:n?'🌙':'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌦️',61:'🌧️',63:'🌧️',65:'🌧️',66:'🌧️',67:'🌧️',71:'🌨️',73:'🌨️',75:'❄️',80:'🌦️',81:'🌦️',82:'🌧️',95:'⛈️',96:'⛈️',99:'⛈️'};return e[c]||'☁️'}
-function pm25ToQuality(pm){if(pm==null)return{text:'—',color:'#95a5a6'};if(pm<=12)return{text:'Gut',color:'#2ecc71'};if(pm<=35.4)return{text:'Mittel',color:'#f1c40f'};return{text:'Schlecht',color:'#e74c3c'}}
+function pm25ToQuality(pm){if(pm==null)return'—';if(pm<=12)return'Gut';if(pm<=35.4)return'Mittel';return'Schlecht'}
 async function loadData(){
   const wURL=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current_weather=true&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,weathercode,windspeed_10m&timezone=auto`;
   const aURL=`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LON}&hourly=pm2_5&timezone=auto`;
@@ -120,19 +98,15 @@ async function loadData(){
   const wind=Math.round(cw.windspeed ?? h.windspeed_10m?.[idx] ?? 0);
   const code=cw.weathercode ?? h.weathercode?.[idx] ?? 3;
   let pm25=null;if(air&&air.hourly&&air.hourly.pm2_5){let aidx=0;if(air.hourly.time){const iso=new Date().toISOString().slice(0,13);aidx=air.hourly.time.findIndex(t=>t.slice(0,13)===iso);if(aidx<0)aidx=air.hourly.time.length-1;}pm25=air.hourly.pm2_5[aidx];}
-  const aqi=pm25ToQuality(pm25);
-  document.getElementById('place').textContent=CITY_NAME;
   document.getElementById('temp').textContent=temp+'°';
-  document.getElementById('feels').textContent='Gefühlte Temperatur: '+feels+'°';
+  document.getElementById('feels').textContent='Gefühlt '+feels+'°';
   document.getElementById('cond').textContent=wmoToText(Number(code));
   document.getElementById('prec').textContent=(prec??0)+' %';
   document.getElementById('humid').textContent=(hum??0)+' %';
   document.getElementById('wind').textContent=(wind??0)+' km/h';
-  const hour=new Date().getHours(); const night=(hour<6||hour>=21);
-  document.getElementById('icon').textContent=wmoToEmoji(Number(code), night);
-  document.getElementById('aqiText').textContent=aqi.text;
-  document.getElementById('aqiDot').style.background=aqi.color;
-  document.getElementById('updated').textContent='Aktualisiert: '+(new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+  document.getElementById('icon').textContent=wmoToEmoji(Number(code),false);
+  document.getElementById('aqiText').textContent=pm25ToQuality(pm25);
+  document.getElementById('updated').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 }
 loadData();setInterval(loadData,10*60*1000);
 </script>
