@@ -6,6 +6,11 @@
       "duration": 30
     },
     {
+      "src": "media/zahlen.jpg",
+      "type": "image",
+      "duration": 5
+    },
+    {
       "src": "widgets/weather_ahaus.html",
       "type": "html",
       "duration": 15
