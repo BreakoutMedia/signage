@@ -1,171 +1,136 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, maximum-scale=1"
-  />
-  <title>Breakout Media Signage</title>
-  <style>
-    html, body { margin:0; padding:0; background:#000; height:100%; overflow:hidden; }
-    video { width:100vw; height:100vh; object-fit:cover; background:#000; }
-    #dbg { position:fixed; left:0; bottom:0; width:100%; max-height:40vh; overflow:auto;
-           font:12px/1.4 monospace; color:#0f0; background:rgba(0,0,0,.6); padding:8px; display:none; }
-    #msg { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; 
-           color:#888; font:16px/1.5 system-ui, sans-serif; text-align:center; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signage Player – Fire TV Optimiert</title>
+<style>
+  html,body{margin:0;height:100%;background:#000}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
+  video,img,iframe{width:100%;height:100%;object-fit:cover;border:0;background:#000}
+  #msg{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);padding:10px 14px;font-family:system-ui,Arial,sans-serif;font-size:16px;color:#fff;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.2);border-radius:10px;display:none}
+</style>
 </head>
 <body>
-  <video id="player" autoplay muted playsinline></video>
-  <div id="msg" style="display:none;">Lade Inhalte…</div>
-  <pre id="dbg"></pre>
+<div id="stage"></div>
+<div id="msg">Tippe einmal, um die Wiedergabe zu starten</div>
+<script>
+/* ---------- Einstellungen ---------- */
+const params = new URLSearchParams(location.search);
+const SCREEN = (params.get('screen') || 'ahaus').toLowerCase();
+const MANIFEST_URL = `manifests/${SCREEN}.json`;
+const MANIFEST_RELOAD_MIN = 5; // alle X Minuten neu laden
 
-  <script>
-    // === Einstellungen ===
-    // WICHTIG: Pfad RELATIV zur index.html halten (GitHub Pages!)
-    const manifestUrl = './manifests/ahaus.json';  // ggf. pro Screen anpassen
-    const refreshIntervalMs = 15 * 60 * 1000;      // 15 Minuten
-    const debug = location.search.includes('debug=1'); // ?debug=1 zeigt Log
+/* ---------- Helpers ---------- */
+const stage = document.getElementById('stage');
+const msg   = document.getElementById('msg');
+let playlist = [];
+let i = 0;
+let lastLoad = 0;
 
-    // === Elemente ===
-    const videoEl = document.getElementById('player');
-    const dbgEl = document.getElementById('dbg');
-    const msgEl = document.getElementById('msg');
-    if (debug) dbgEl.style.display = 'block';
+const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
+const nowMs = ()=>Date.now();
+const isVideo = (t)=>String(t).toLowerCase()==='video';
+const isImage = (t)=>String(t).toLowerCase()==='image';
+const isHTML  = (t)=>String(t).toLowerCase()==='html';
 
-    // === State ===
-    let spots = [];
-    let idx = 0;
-    let playGuard;
+async function loadManifest(force=false){
+  if(!force && (nowMs()-lastLoad) < MANIFEST_RELOAD_MIN*60*1000) return;
+  const r = await fetch(MANIFEST_URL + '?t=' + nowMs(), {cache:'no-store'});
+  const data = await r.json();
+  playlist = Array.isArray(data.media) ? data.media : [];
+  lastLoad = nowMs();
+}
 
-    function log(...args){ if (debug) { dbgEl.textContent += args.join(' ') + '\n'; } console.log(...args); }
+function clearStage(){ stage.innerHTML=''; }
 
-    // Sanity-Checks für Manifest
-    function validateManifest(data){
-      if (!data || !Array.isArray(data.spots)) return 'Manifest hat kein "spots"-Array';
-      if (data.spots.length === 0) return 'Manifest enthält keine Spots';
-      for (let i=0;i<data.spots.length;i++){
-        const s = data.spots[i];
-        if (!s || typeof s.src !== 'string') return `Spot ${i} hat keine gültige "src"`;
-        if (!/^https?:\/\//.test(s.src) && !s.src.startsWith('./') && !s.src.startsWith('manifests') && !s.src.startsWith('media') && !s.src.startsWith('../')) {
-          return `Spot ${i} src wirkt nicht relativ/absolut erreichbar: ${s.src}`;
-        }
-      }
-      return null;
-    }
+function makeVideo(src){
+  const v = document.createElement('video');
+  v.setAttribute('autoplay','');      // wichtig für Fire OS
+  v.setAttribute('muted','');         // Autoplay verlangt muted
+  v.setAttribute('playsinline','');   // iOS/Android WebView
+  v.setAttribute('webkit-playsinline','');
+  v.preload = 'auto';
+  v.muted = true;
+  v.playsInline = true;
+  v.src = src;                        // GitHub Pages URL /media/...
+  return v;
+}
+function makeImage(src){
+  const im = document.createElement('img');
+  im.decoding = 'async';
+  im.loading = 'eager';
+  im.src = src;
+  return im;
+}
+function makeIframe(src){
+  const f = document.createElement('iframe');
+  f.src = src; // z.B. widgets/weather_ahaus.html
+  f.referrerPolicy = 'no-referrer';
+  f.allow = 'autoplay; clipboard-read; clipboard-write';
+  return f;
+}
 
-    async function fetchManifest(){
-      try {
-        const res = await fetch(manifestUrl + (manifestUrl.includes('?')?'&':'?') + 't=' + Date.now(), { cache: 'no-store' });
-        if (!res.ok) throw new Error(`Manifest HTTP ${res.status}`);
-        const data = await res.json();
-        const err = validateManifest(data);
-        if (err){ throw new Error(err); }
+async function playItem(item){
+  const type = String(item.type || '').toLowerCase();
+  const dur  = Math.max(1, Number(item.duration || 10)) * 1000;
+  clearStage();
 
-        const same = JSON.stringify(data.spots) === JSON.stringify(spots);
-        if (!same){
-          spots = data.spots;
-          idx = 0;
-          log('[MANIFEST] Neu geladen. Spots:', spots.length);
-          if (spots.length > 0) playIndex(idx, /*force*/true);
-        } else {
-          log('[MANIFEST] Unverändert.');
-        }
-        hideMessage();
-      } catch (e){
-        showMessage('Fehler beim Laden der Inhalte. Prüfe Manifest & Pfade.');
-        log('[ERROR][Manifest]', e.message || e);
-      }
-    }
+  if(isVideo(type)){
+    const v = makeVideo(item.src);
+    stage.appendChild(v);
 
-    function showMessage(t){ msgEl.style.display = 'flex'; msgEl.textContent = t; }
-    function hideMessage(){ msgEl.style.display = 'none'; }
-
-    function nextIndex(){ idx = (idx + 1) % spots.length; return idx; }
-
-    function playIndex(i, force=false){
-      if (!spots.length){ showMessage('Keine Spots im Manifest.'); return; }
-      const spot = spots[i];
-      // Setze Quelle neu
-      videoEl.pause();
-      // Fallback: src zurücksetzen, damit WebView wirklich neu lädt
-      videoEl.removeAttribute('src');
-      videoEl.load();
-
-      // Autoplay-Attribute sicherstellen
-      videoEl.muted = true;
-      videoEl.playsInline = true;
-
-      // Quelle setzen
-      videoEl.src = spot.src;
-      log('[PLAY]', i, spot.src);
-
-      // Sicherheits-Timer: Wenn innerhalb von 6s kein "playing", zum nächsten Spot
-      clearTimeout(playGuard);
-      playGuard = setTimeout(() => {
-        log('[WARN] Kein Start innerhalb 6s → weiter');
-        playNext();
-      }, 6000);
-
-      // Abspielen versuchen
-      videoEl.play().catch(err => {
-        log('[ERROR] play() Exception:', err && err.message ? err.message : err);
-        playNext();
+    // Start robust anschieben
+    try {
+      // erst src setzen, dann play() triggern
+      await v.play();
+    } catch(e){
+      // falls Fire OS doch Interaktion verlangt
+      msg.style.display = 'block';
+      await new Promise(res=>{
+        const start=()=>{ msg.style.display='none'; document.removeEventListener('click',start); document.removeEventListener('keydown',start); res(); };
+        document.addEventListener('click',start);
+        document.addEventListener('keydown',start);
       });
+      await v.play();
     }
 
-    function playNext(){
-      if (!spots.length) return;
-      nextIndex();
-      playIndex(idx);
-    }
+    // exakt nach duration weiter (sekundengenau)
+    await sleep(dur);
+    v.pause();
+    v.remove();
+    return;
+  }
 
-    // Event-Handling für robuste Wiedergabe
-    videoEl.addEventListener('playing', () => {
-      clearTimeout(playGuard);
-      hideMessage();
-      log('[EVENT] playing');
-    });
+  if(isImage(type)){
+    const im = makeImage(item.src);
+    stage.appendChild(im);
+    await sleep(dur);
+    im.remove();
+    return;
+  }
 
-    videoEl.addEventListener('ended', () => {
-      log('[EVENT] ended');
-      playNext();
-    });
+  if(isHTML(type)){
+    const f = makeIframe(item.src);
+    stage.appendChild(f);
+    await sleep(dur);
+    f.remove();
+    return;
+  }
+}
 
-    videoEl.addEventListener('error', (e) => {
-      const code = (videoEl.error && videoEl.error.code) || 'unknown';
-      log('[EVENT] error code=', code);
-      playNext();
-    });
+async function loop(){
+  if(!playlist.length){ clearStage(); const d=document.createElement('div'); d.style.cssText='color:#fff;font:16px system-ui,Arial;padding:20px'; d.textContent='Keine Inhalte im Manifest.'; stage.appendChild(d); await sleep(3000); return; }
+  const item = playlist[i % playlist.length];
+  await playItem(item);
+  i++;
+  if(i % playlist.length === 0){ await loadManifest(false); }
+}
 
-    videoEl.addEventListener('stalled', () => {
-      log('[EVENT] stalled → weiter');
-      playNext();
-    });
-
-    videoEl.addEventListener('waiting', () => {
-      log('[EVENT] waiting…');
-    });
-
-    // Initial laden
-    showMessage('Lade Inhalte…');
-    fetchManifest().then(() => {
-      if (spots.length) {
-        playIndex(idx, true);
-      }
-    });
-
-    // Regelmäßiges Manifest-Refresh
-    setInterval(fetchManifest, refreshIntervalMs);
-
-    // Optional: Netzwechsel/Visibility
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && spots.length) {
-        log('[INFO] Sichtbar → weiter');
-        videoEl.play().catch(()=>{});
-      }
-    });
-  </script>
+(async function start(){
+  await loadManifest(true);
+  while(true){ await loop(); }
+})();
+</script>
 </body>
 </html>
