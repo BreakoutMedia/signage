@@ -1,7 +1,7 @@
 {
   "spots": [
     {
-      "src": "/media/itsfreshneu.mp4",
+      "src": "./media/itsfreshneu.mp4",
       "type": "video",
       "duration": 30
     }
