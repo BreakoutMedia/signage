@@ -1,9 +1,5 @@
 {
-  "spots": [
-    {
-      "src": "./media/itsfreshneu.mp4",
-      "type": "video",
-      "duration": 30
-    }
+  "media": [
+    { "src": "media/ahaus/itsfreshneu.mp4", "type": "video", "duration": 30 }
   ]
 }
