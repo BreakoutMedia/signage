@@ -1,75 +1,171 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Breakout Media Signage</title>
-<style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    background: #000;
-    overflow: hidden;
-  }
-  video {
-    width: 100vw;
-    height: 100vh;
-    object-fit: cover;
-    background: #000;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1"
+  />
+  <title>Breakout Media Signage</title>
+  <style>
+    html, body { margin:0; padding:0; background:#000; height:100%; overflow:hidden; }
+    video { width:100vw; height:100vh; object-fit:cover; background:#000; }
+    #dbg { position:fixed; left:0; bottom:0; width:100%; max-height:40vh; overflow:auto;
+           font:12px/1.4 monospace; color:#0f0; background:rgba(0,0,0,.6); padding:8px; display:none; }
+    #msg { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; 
+           color:#888; font:16px/1.5 system-ui, sans-serif; text-align:center; }
+  </style>
 </head>
 <body>
-<video id="player" autoplay muted playsinline></video>
+  <video id="player" autoplay muted playsinline></video>
+  <div id="msg" style="display:none;">Lade Inhalte…</div>
+  <pre id="dbg"></pre>
 
-<script>
-const manifestUrl = 'manifests/ahaus.json'; // Passe ggf. den Pfad an
-let spots = [];
-let currentIndex = 0;
-let refreshInterval = 15 * 60 * 1000; // alle 15 Minuten
-let player = document.getElementById('player');
+  <script>
+    // === Einstellungen ===
+    // WICHTIG: Pfad RELATIV zur index.html halten (GitHub Pages!)
+    const manifestUrl = './manifests/ahaus.json';  // ggf. pro Screen anpassen
+    const refreshIntervalMs = 15 * 60 * 1000;      // 15 Minuten
+    const debug = location.search.includes('debug=1'); // ?debug=1 zeigt Log
 
-async function fetchManifest() {
-  try {
-    const res = await fetch(manifestUrl + '?t=' + Date.now(), { cache: 'no-cache' });
-    if (!res.ok) throw new Error('Manifest konnte nicht geladen werden');
-    const data = await res.json();
-    if (JSON.stringify(data.spots) !== JSON.stringify(spots)) {
-      console.log('[INFO] Manifest geändert, aktualisiere Spots...');
-      spots = data.spots;
-      currentIndex = 0;
-      if (spots.length > 0) playCurrent();
-    } else {
-      console.log('[INFO] Manifest unverändert');
+    // === Elemente ===
+    const videoEl = document.getElementById('player');
+    const dbgEl = document.getElementById('dbg');
+    const msgEl = document.getElementById('msg');
+    if (debug) dbgEl.style.display = 'block';
+
+    // === State ===
+    let spots = [];
+    let idx = 0;
+    let playGuard;
+
+    function log(...args){ if (debug) { dbgEl.textContent += args.join(' ') + '\n'; } console.log(...args); }
+
+    // Sanity-Checks für Manifest
+    function validateManifest(data){
+      if (!data || !Array.isArray(data.spots)) return 'Manifest hat kein "spots"-Array';
+      if (data.spots.length === 0) return 'Manifest enthält keine Spots';
+      for (let i=0;i<data.spots.length;i++){
+        const s = data.spots[i];
+        if (!s || typeof s.src !== 'string') return `Spot ${i} hat keine gültige "src"`;
+        if (!/^https?:\/\//.test(s.src) && !s.src.startsWith('./') && !s.src.startsWith('manifests') && !s.src.startsWith('media') && !s.src.startsWith('../')) {
+          return `Spot ${i} src wirkt nicht relativ/absolut erreichbar: ${s.src}`;
+        }
+      }
+      return null;
     }
-  } catch (err) {
-    console.error('[ERROR] Manifest-Load:', err);
-  }
-}
 
-function playCurrent() {
-  if (spots.length === 0) {
-    console.warn('Keine Spots verfügbar.');
-    return;
-  }
-  const spot = spots[currentIndex];
-  console.log('[PLAY]', spot.src);
-  player.src = spot.src;
-  player.play().catch(err => console.error('Play-Error:', err));
-}
+    async function fetchManifest(){
+      try {
+        const res = await fetch(manifestUrl + (manifestUrl.includes('?')?'&':'?') + 't=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Manifest HTTP ${res.status}`);
+        const data = await res.json();
+        const err = validateManifest(data);
+        if (err){ throw new Error(err); }
 
-player.addEventListener('ended', () => {
-  currentIndex = (currentIndex + 1) % spots.length;
-  playCurrent();
-});
+        const same = JSON.stringify(data.spots) === JSON.stringify(spots);
+        if (!same){
+          spots = data.spots;
+          idx = 0;
+          log('[MANIFEST] Neu geladen. Spots:', spots.length);
+          if (spots.length > 0) playIndex(idx, /*force*/true);
+        } else {
+          log('[MANIFEST] Unverändert.');
+        }
+        hideMessage();
+      } catch (e){
+        showMessage('Fehler beim Laden der Inhalte. Prüfe Manifest & Pfade.');
+        log('[ERROR][Manifest]', e.message || e);
+      }
+    }
 
-// Initial laden
-fetchManifest().then(() => {
-  if (spots.length > 0) playCurrent();
-});
+    function showMessage(t){ msgEl.style.display = 'flex'; msgEl.textContent = t; }
+    function hideMessage(){ msgEl.style.display = 'none'; }
 
-// Regelmäßiges Aktualisieren des Manifests
-setInterval(fetchManifest, refreshInterval);
-</script>
+    function nextIndex(){ idx = (idx + 1) % spots.length; return idx; }
+
+    function playIndex(i, force=false){
+      if (!spots.length){ showMessage('Keine Spots im Manifest.'); return; }
+      const spot = spots[i];
+      // Setze Quelle neu
+      videoEl.pause();
+      // Fallback: src zurücksetzen, damit WebView wirklich neu lädt
+      videoEl.removeAttribute('src');
+      videoEl.load();
+
+      // Autoplay-Attribute sicherstellen
+      videoEl.muted = true;
+      videoEl.playsInline = true;
+
+      // Quelle setzen
+      videoEl.src = spot.src;
+      log('[PLAY]', i, spot.src);
+
+      // Sicherheits-Timer: Wenn innerhalb von 6s kein "playing", zum nächsten Spot
+      clearTimeout(playGuard);
+      playGuard = setTimeout(() => {
+        log('[WARN] Kein Start innerhalb 6s → weiter');
+        playNext();
+      }, 6000);
+
+      // Abspielen versuchen
+      videoEl.play().catch(err => {
+        log('[ERROR] play() Exception:', err && err.message ? err.message : err);
+        playNext();
+      });
+    }
+
+    function playNext(){
+      if (!spots.length) return;
+      nextIndex();
+      playIndex(idx);
+    }
+
+    // Event-Handling für robuste Wiedergabe
+    videoEl.addEventListener('playing', () => {
+      clearTimeout(playGuard);
+      hideMessage();
+      log('[EVENT] playing');
+    });
+
+    videoEl.addEventListener('ended', () => {
+      log('[EVENT] ended');
+      playNext();
+    });
+
+    videoEl.addEventListener('error', (e) => {
+      const code = (videoEl.error && videoEl.error.code) || 'unknown';
+      log('[EVENT] error code=', code);
+      playNext();
+    });
+
+    videoEl.addEventListener('stalled', () => {
+      log('[EVENT] stalled → weiter');
+      playNext();
+    });
+
+    videoEl.addEventListener('waiting', () => {
+      log('[EVENT] waiting…');
+    });
+
+    // Initial laden
+    showMessage('Lade Inhalte…');
+    fetchManifest().then(() => {
+      if (spots.length) {
+        playIndex(idx, true);
+      }
+    });
+
+    // Regelmäßiges Manifest-Refresh
+    setInterval(fetchManifest, refreshIntervalMs);
+
+    // Optional: Netzwechsel/Visibility
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && spots.length) {
+        log('[INFO] Sichtbar → weiter');
+        videoEl.play().catch(()=>{});
+      }
+    });
+  </script>
 </body>
 </html>
