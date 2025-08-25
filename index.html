@@ -1,137 +1,75 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Signage Player – Fire TV Optimiert</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breakout Media Signage</title>
 <style>
-  html,body{margin:0;height:100%;background:#000}
-  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
-  video,img,iframe{width:100%;height:100%;object-fit:cover;border:0;background:#000}
-  #msg{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);padding:10px 14px;font-family:system-ui,Arial,sans-serif;font-size:16px;color:#fff;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.2);border-radius:10px;display:none}
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    overflow: hidden;
+  }
+  video {
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    background: #000;
+  }
 </style>
 </head>
 <body>
-<div id="stage"></div>
-<div id="msg">Tippe einmal, um die Wiedergabe zu starten</div>
+<video id="player" autoplay muted playsinline></video>
+
 <script>
-/* ---------- Einstellungen ---------- */
-const params = new URLSearchParams(location.search);
-const SCREEN = (params.get('screen') || 'ahaus').toLowerCase();
-const MANIFEST_URL = `manifests/${SCREEN}.json`;
-const MANIFEST_RELOAD_MIN = 5; // alle X Minuten neu laden
+const manifestUrl = 'manifests/ahaus.json'; // Passe ggf. den Pfad an
+let spots = [];
+let currentIndex = 0;
+let refreshInterval = 15 * 60 * 1000; // alle 15 Minuten
+let player = document.getElementById('player');
 
-/* ---------- Helpers ---------- */
-const stage = document.getElementById('stage');
-const msg   = document.getElementById('msg');
-let playlist = [];
-let i = 0;
-let lastLoad = 0;
-
-const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
-const nowMs = ()=>Date.now();
-const isVideo = (t)=>String(t).toLowerCase()==='video';
-const isImage = (t)=>String(t).toLowerCase()==='image';
-const isHTML  = (t)=>String(t).toLowerCase()==='html';
-
-async function loadManifest(force=false){
-  if(!force && (nowMs()-lastLoad) < MANIFEST_RELOAD_MIN*60*1000) return;
-  const r = await fetch(MANIFEST_URL + '?t=' + nowMs(), {cache:'no-store'});
-  const data = await r.json();
-  playlist = Array.isArray(data.media) ? data.media : [];
-  lastLoad = nowMs();
-}
-
-function clearStage(){ stage.innerHTML=''; }
-
-function makeVideo(src){
-  const v = document.createElement('video');
-  v.setAttribute('autoplay','');      // wichtig für Fire OS
-  v.setAttribute('muted','');         // Autoplay verlangt muted
-  v.setAttribute('playsinline','');   // iOS/Android WebView
-  v.setAttribute('webkit-playsinline','');
-  v.preload = 'auto';
-  v.muted = true;
-  v.playsInline = true;
-  v.src = src;                        // GitHub Pages URL /media/...
-  return v;
-}
-function makeImage(src){
-  const im = document.createElement('img');
-  im.decoding = 'async';
-  im.loading = 'eager';
-  im.src = src;
-  return im;
-}
-function makeIframe(src){
-  const f = document.createElement('iframe');
-  f.src = src; // z.B. widgets/weather_ahaus.html
-  f.referrerPolicy = 'no-referrer';
-  f.allow = 'autoplay; clipboard-read; clipboard-write';
-  return f;
-}
-
-async function playItem(item){
-  const type = String(item.type || '').toLowerCase();
-  const dur  = Math.max(1, Number(item.duration || 10)) * 1000;
-  clearStage();
-
-  if(isVideo(type)){
-    const v = makeVideo(item.src);
-    stage.appendChild(v);
-
-    // Start robust anschieben
-    try {
-      // erst src setzen, dann play() triggern
-      await v.play();
-    } catch(e){
-      // falls Fire OS doch Interaktion verlangt
-      msg.style.display = 'block';
-      await new Promise(res=>{
-        const start=()=>{ msg.style.display='none'; document.removeEventListener('click',start); document.removeEventListener('keydown',start); res(); };
-        document.addEventListener('click',start);
-        document.addEventListener('keydown',start);
-      });
-      await v.play();
+async function fetchManifest() {
+  try {
+    const res = await fetch(manifestUrl + '?t=' + Date.now(), { cache: 'no-cache' });
+    if (!res.ok) throw new Error('Manifest konnte nicht geladen werden');
+    const data = await res.json();
+    if (JSON.stringify(data.spots) !== JSON.stringify(spots)) {
+      console.log('[INFO] Manifest geändert, aktualisiere Spots...');
+      spots = data.spots;
+      currentIndex = 0;
+      if (spots.length > 0) playCurrent();
+    } else {
+      console.log('[INFO] Manifest unverändert');
     }
-
-    // exakt nach duration weiter (sekundengenau)
-    await sleep(dur);
-    v.pause();
-    v.remove();
-    return;
-  }
-
-  if(isImage(type)){
-    const im = makeImage(item.src);
-    stage.appendChild(im);
-    await sleep(dur);
-    im.remove();
-    return;
-  }
-
-  if(isHTML(type)){
-    const f = makeIframe(item.src);
-    stage.appendChild(f);
-    await sleep(dur);
-    f.remove();
-    return;
+  } catch (err) {
+    console.error('[ERROR] Manifest-Load:', err);
   }
 }
 
-async function loop(){
-  if(!playlist.length){ clearStage(); const d=document.createElement('div'); d.style.cssText='color:#fff;font:16px system-ui,Arial;padding:20px'; d.textContent='Keine Inhalte im Manifest.'; stage.appendChild(d); await sleep(3000); return; }
-  const item = playlist[i % playlist.length];
-  await playItem(item);
-  i++;
-  if(i % playlist.length === 0){ await loadManifest(false); }
+function playCurrent() {
+  if (spots.length === 0) {
+    console.warn('Keine Spots verfügbar.');
+    return;
+  }
+  const spot = spots[currentIndex];
+  console.log('[PLAY]', spot.src);
+  player.src = spot.src;
+  player.play().catch(err => console.error('Play-Error:', err));
 }
 
-(async function start(){
-  await loadManifest(true);
-  while(true){ await loop(); }
-})();
+player.addEventListener('ended', () => {
+  currentIndex = (currentIndex + 1) % spots.length;
+  playCurrent();
+});
+
+// Initial laden
+fetchManifest().then(() => {
+  if (spots.length > 0) playCurrent();
+});
+
+// Regelmäßiges Aktualisieren des Manifests
+setInterval(fetchManifest, refreshInterval);
 </script>
 </body>
 </html>
-
