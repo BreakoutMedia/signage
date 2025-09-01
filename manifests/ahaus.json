@@ -1,7 +1,7 @@
 {
   "media": [
-    { "src": "media/ifl3.mp4", "type": "video", "duration": 20 },
-    { "src": "media/ifl5.mp4", "type": "video", "duration": 20 },
-    { "src": "media/ifl2.mp4", "type": "video", "duration": 5 }
+    { "src": "media/ifneu2.mp4", "type": "video", "duration": 20 },
+    { "src": "media/ifl5.mp4", "type": "video", "duration": 22 },
+    { "src": "media/ifneu.mp4", "type": "video", "duration": 5 }
   ]
 }
