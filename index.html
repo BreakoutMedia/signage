@@ -17,7 +17,7 @@ const params = new URLSearchParams(location.search);
 const screen = (params.get('screen') || 'ahaus').toLowerCase();
 
 // 👉 einzige Änderung: signage → signagecoe
-const manifestUrl = `https://breakoutmedia.github.io/signagecoe/manifests/${screen}.json`;
+const manifestUrl = `https://breakoutmedia.github.io/signage/manifests/${screen}.json`;
 
 let playlist = [];
 let idx = 0;
